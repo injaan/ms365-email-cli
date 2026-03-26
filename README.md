@@ -1,83 +1,55 @@
-# ms365-email-cli
+# @injaan.dev/ms365-email-cli
 
-CLI tool to manage an MS365 mailbox via Microsoft Graph API.
+MS365 mailbox CLI for AI-agent and automation workflows using Microsoft Graph API.
 
-This project is specially built for AI agents to read, search, triage, and act on mailbox data through simple terminal commands.
-
-## Built For AI Agents
-
-- Predictable CLI command patterns for automation
-- Structured, script-friendly output for parsing
-- End-to-end email workflows (read, search, reply, send, attachments)
-- Easy local setup with environment-based credentials
-
-## Features
-
-- Configure credentials with a guided wizard (`init`)
-- List unread or recent emails
-- Search emails by query, sender, subject, date, and folder
-- Read email body and thread messages
-- List or download attachments
-- Mark messages as read
-- Send, reply, and reply-all with optional attachments
-
-## Requirements
-
-- Node.js (compatible with your installed dependencies)
-- An Azure AD app with Microsoft Graph permissions:
-  - `Mail.ReadWrite`
-  - `Mail.Send`
-- Admin consent granted for the app
-
-## Installation
-
-```bash
-npm install
-```
-
-Global install from npm:
+## Install
 
 ```bash
 npm i -g @injaan.dev/ms365-email-cli
 ```
 
-After install, run:
+Verify:
 
 ```bash
 ms365-email-cli --help
 ```
 
-For global CLI usage while developing:
+## What It Does
 
-```bash
-npm link
-```
+- Initialize credentials with an interactive wizard
+- List unread or recent emails
+- Search by text, sender, subject, date, or folder
+- Read full email body and thread history
+- List/download attachments
+- Mark messages as read
+- Send, reply, and reply-all (with optional attachments)
 
-## Configuration
+## Requirements
 
-Run:
+- Node.js 20+
+- Azure AD app with Graph permissions:
+  - `Mail.ReadWrite`
+  - `Mail.Send`
+- Admin consent granted
+
+## Setup
+
+Run the wizard:
 
 ```bash
 ms365-email-cli init
 ```
 
-This creates/updates a local `.env` file with:
+It creates or updates `.env` with:
 
 - `MS365_EMAIL_CLIENT_ID`
 - `MS365_EMAIL_TENANT_ID`
 - `MS365_EMAIL_CLIENT_SECRET`
 - `MS365_FROM_EMAIL`
 
-## Usage
+## Quick Commands
 
 ```bash
-ms365-email-cli --help
-```
-
-Examples:
-
-```bash
-ms365-email-cli init
 ms365-email-cli unread -n 5
 ms365-email-cli list -n 20
 ms365-email-cli search -q "invoice"
@@ -90,13 +62,20 @@ ms365-email-cli reply <MESSAGE_ID> -b "Thanks"
 ms365-email-cli reply-all <MESSAGE_ID> -b "Thanks everyone"
 ```
 
-## Development
+## AI-Agent Friendly
 
-Run the CLI directly:
+- Predictable command surface for tooling
+- Script-friendly terminal output
+- Full inbox workflows via CLI (read/search/reply/send/attachments)
 
-```bash
-npm start
-```
+## Troubleshooting
+
+- `command not found: ms365-email-cli`:
+  reinstall globally with `npm i -g @injaan.dev/ms365-email-cli`
+- `Missing MS365 credentials`:
+  run `ms365-email-cli init`
+- Graph auth/permission errors:
+  confirm app permissions and admin consent in Azure
 
 ## License
 
