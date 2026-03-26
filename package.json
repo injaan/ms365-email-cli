@@ -1,6 +1,6 @@
 {
   "name": "@injaan.dev/ms365-email-cli",
-  "version": "1.0.4",
+  "version": "1.0.3",
   "description": "CLI tool to manage MS365 mailbox via Microsoft Graph API",
   "main": "index.js",
   "bin": {
