@@ -32,7 +32,6 @@
     "type": "git",
     "url": "git+https://github.com/injaan/ms365-email-cli.git"
   },
-  //"homepage": "https://github.com/injaan/ms365-email-cli#readme",
   "bugs": {
     "url": "https://github.com/injaan/ms365-email-cli/issues"
   },
