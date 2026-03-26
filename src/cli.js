@@ -20,9 +20,67 @@ function sanitizeTerminalOutput(value) {
   return String(value ?? "").replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u001b]/g, "");
 }
 
+function decodeHtmlEntities(value) {
+  const namedEntities = {
+    amp: "&",
+    lt: "<",
+    gt: ">",
+    quot: "\"",
+    apos: "'",
+    nbsp: " ",
+  };
+
+  return value.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (match, entity) => {
+    const normalized = entity.toLowerCase();
+    if (namedEntities[normalized]) {
+      return namedEntities[normalized];
+    }
+    if (normalized.startsWith("#x")) {
+      const codePoint = Number.parseInt(normalized.slice(2), 16);
+      return Number.isNaN(codePoint) ? match : String.fromCodePoint(codePoint);
+    }
+    if (normalized.startsWith("#")) {
+      const codePoint = Number.parseInt(normalized.slice(1), 10);
+      return Number.isNaN(codePoint) ? match : String.fromCodePoint(codePoint);
+    }
+    return match;
+  });
+}
+
+function htmlToReadableText(html) {
+  return decodeHtmlEntities(String(html ?? ""))
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, "")
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|section|article|header|footer|li|tr|h[1-6])>/gi, "\n")
+    .replace(/<li\b[^>]*>/gi, "- ")
+    .replace(/<\/td>/gi, "\t")
+    .replace(/<\/th>/gi, "\t")
+    .replace(/<[^>]+>/g, "")
+    .replace(/\r/g, "")
+    .replace(/\t+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .split("\n")
+    .map((line) => line.replace(/[ \t]+/g, " ").trimEnd())
+    .join("\n")
+    .trim();
+}
+
 function safeDisplay(value, fallback = "Unknown") {
   const sanitized = sanitizeTerminalOutput(value).trim();
   return sanitized || fallback;
+}
+
+function formatMessageBody(body) {
+  if (!body?.content) {
+    return "(empty body)";
+  }
+
+  const contentType = String(body.contentType || "").toUpperCase();
+  const rawContent = String(body.content);
+  const formatted = contentType === "HTML" ? htmlToReadableText(rawContent) : rawContent;
+  const sanitized = sanitizeTerminalOutput(formatted).trim();
+  return sanitized || "(empty body)";
 }
 
 function sanitizeAttachmentName(name) {
@@ -299,7 +357,7 @@ program
       }
 
       console.log(`\n--- Body (${msg.body?.contentType || "unknown"}) ---\n`);
-      console.log(sanitizeTerminalOutput(msg.body?.content || "(empty body)"));
+      console.log(formatMessageBody(msg.body));
     } catch (err) {
       console.error("Error:", err.message);
       process.exit(1);
