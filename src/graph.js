@@ -1,6 +1,7 @@
 const https = require("https");
 const fs = require("fs");
 const path = require("path");
+const { normalizeAuthMode } = require("./auth");
 
 const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -33,6 +34,11 @@ function normalizeSinceDate(since) {
 }
 
 function getUserPath() {
+  const authMode = normalizeAuthMode(process.env.AUTH_MODE);
+  if (authMode === "delegated") {
+    return "/me";
+  }
+
   const email = process.env.MS365_EMAIL_ADDRESS;
   if (!email) {
     throw new Error(

@@ -42,10 +42,27 @@ ms365-email-cli init
 
 It creates or updates `.env` with:
 
+- `AUTH_MODE` (`client_credentials` or `delegated`)
 - `MS365_EMAIL_CLIENT_ID`
+
+Auth mode guidance:
+
+- `AUTH_MODE=delegated` is for personal Microsoft accounts (Outlook/Hotmail/Live)
+- `AUTH_MODE=client_credentials` is for company/work accounts
+
+When `AUTH_MODE=client_credentials`:
+
 - `MS365_EMAIL_TENANT_ID`
 - `MS365_EMAIL_CLIENT_SECRET`
 - `MS365_EMAIL_ADDRESS`
+
+When `AUTH_MODE=delegated`:
+
+- Sign-in happens via device-code prompt in terminal
+- API calls use the signed-in mailbox (`/me`)
+- Wizard auto-sets `MS365_EMAIL_TENANT_ID=consumers`
+- If your tenant is set to `common` but app is Microsoft-account-only, the CLI auto-falls back to `/consumers`
+- Access/refresh tokens are cached locally, so login is reused across runs until refresh expires or is revoked
 
 ## Quick Commands
 
@@ -74,6 +91,14 @@ ms365-email-cli reply-all <MESSAGE_ID> -b "Thanks everyone"
   reinstall globally with `npm i -g @injaan.dev/ms365-email-cli`
 - `Missing MS365 credentials`:
   run `ms365-email-cli init`
+- Personal mailbox returns invalid user:
+  set `AUTH_MODE=delegated` and re-run (app-only mode cannot access personal Outlook users by `/users/{email}`)
+- Delegated sign-in fails with `AADSTS7000218`:
+  your app registration is requiring client auth; either add `MS365_EMAIL_CLIENT_SECRET` in `.env` or enable public client flows in Azure App Registration
+- Delegated sign-in fails with `AADSTS70002` (client must be marked as mobile):
+  in Azure App Registration -> Authentication, enable public client flows (mobile and desktop)
+- Need to force delegated re-login:
+  delete `~/.@injaan.dev/ms365-email-cli/delegated-token.json` and run a command again
 - Graph auth/permission errors:
   confirm app permissions and admin consent in Azure
 

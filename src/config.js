@@ -3,8 +3,15 @@ const path = require("path");
 const readline = require("readline");
 const { CONFIG_DIR, ENV_PATH, LOCAL_ENV } = require("./paths");
 
-const REQUIRED_VARS = [
+const BASE_VARS = [
+  {
+    key: "AUTH_MODE",
+    label: "Auth mode (client_credentials or delegated)",
+  },
   { key: "MS365_EMAIL_CLIENT_ID", label: "Client ID" },
+];
+
+const CLIENT_CREDENTIALS_VARS = [
   { key: "MS365_EMAIL_TENANT_ID", label: "Tenant ID" },
   { key: "MS365_EMAIL_CLIENT_SECRET", label: "Client Secret", secret: true },
   { key: "MS365_EMAIL_ADDRESS", label: "Mailbox email address" },
@@ -33,8 +40,23 @@ function loadEnv() {
   return { ...local, ...home };
 }
 
+function normalizeAuthMode(value) {
+  const mode = String(value || "client_credentials")
+    .trim()
+    .toLowerCase();
+  return mode === "delegated" ? "delegated" : "client_credentials";
+}
+
+function getRequiredVars(env) {
+  const authMode = normalizeAuthMode(env.AUTH_MODE);
+  if (authMode === "delegated") {
+    return BASE_VARS;
+  }
+  return [...BASE_VARS, ...CLIENT_CREDENTIALS_VARS];
+}
+
 function getMissingVars(env) {
-  return REQUIRED_VARS.filter((v) => !env[v.key]);
+  return getRequiredVars(env).filter((v) => !env[v.key]);
 }
 
 function ask(question, mask = false) {
@@ -75,6 +97,7 @@ function ask(question, mask = false) {
 
 async function runWizard() {
   const existing = loadEnv();
+  existing.AUTH_MODE = normalizeAuthMode(existing.AUTH_MODE);
   const missing = getMissingVars(existing);
 
   if (missing.length === 0) {
@@ -90,8 +113,22 @@ async function runWizard() {
 
   console.log("=== MS365 Mail Manager Config ===\n");
   const values = { ...existing };
+  if (!values.AUTH_MODE) {
+    values.AUTH_MODE = "client_credentials";
+  }
 
-  for (const v of REQUIRED_VARS) {
+  const modeInput = await ask(
+    `Auth mode (${values.AUTH_MODE}) [client_credentials/delegated]: `,
+  );
+  if (modeInput) {
+    values.AUTH_MODE = normalizeAuthMode(modeInput);
+  }
+
+  const requiredVars = getRequiredVars(values).filter(
+    (v) => v.key !== "AUTH_MODE",
+  );
+
+  for (const v of requiredVars) {
     const hasCurrent = !!existing[v.key];
     const masked =
       hasCurrent && v.secret
@@ -113,8 +150,20 @@ async function runWizard() {
     values[v.key] = ans;
   }
 
+  if (values.AUTH_MODE === "delegated") {
+    values.MS365_EMAIL_TENANT_ID = "consumers";
+    delete values.MS365_EMAIL_CLIENT_SECRET;
+    delete values.MS365_EMAIL_ADDRESS;
+  }
+
   const content =
-    REQUIRED_VARS.map((v) => `${v.key}=${values[v.key]}`).join("\n") + "\n";
+    Object.entries(values)
+      .filter(
+        ([, value]) =>
+          value !== undefined && value !== null && String(value).trim() !== "",
+      )
+      .map(([key, value]) => `${key}=${String(value).trim()}`)
+      .join("\n") + "\n";
   if (!fs.existsSync(CONFIG_DIR)) {
     fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: CONFIG_DIR_MODE });
   }

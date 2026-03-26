@@ -128,7 +128,9 @@ program
   .name("ms365-email-cli")
   .description(
     "CLI tool to manage MS365 mailbox via Microsoft Graph API\n" +
-      "  Requires .env with MS365_EMAIL_CLIENT_ID, MS365_EMAIL_TENANT_ID, MS365_EMAIL_CLIENT_SECRET\n" +
+      "  AUTH_MODE=delegated (personal Microsoft accounts) requires: MS365_EMAIL_CLIENT_ID\n" +
+      "  AUTH_MODE=client_credentials (company/work accounts) requires: MS365_EMAIL_CLIENT_ID + MS365_EMAIL_TENANT_ID + MS365_EMAIL_CLIENT_SECRET + MS365_EMAIL_ADDRESS\n" +
+      "  delegated mode signs in interactively and uses /me endpoints\n" +
       "  Azure app needs Mail.ReadWrite + Mail.Send permissions with admin consent",
   )
   .version(packageVersion)
