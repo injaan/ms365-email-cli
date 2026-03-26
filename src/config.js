@@ -10,6 +10,9 @@ const REQUIRED_VARS = [
   { key: "MS365_FROM_EMAIL", label: "Mailbox email address" },
 ];
 
+const CONFIG_DIR_MODE = 0o700;
+const ENV_FILE_MODE = 0o600;
+
 function parseEnvFile(filePath) {
   const env = {};
   if (!fs.existsSync(filePath)) return env;
@@ -92,8 +95,12 @@ async function runWizard() {
   }
 
   const content = REQUIRED_VARS.map((v) => `${v.key}=${values[v.key]}`).join("\n") + "\n";
-  if (!fs.existsSync(CONFIG_DIR)) fs.mkdirSync(CONFIG_DIR, { recursive: true });
-  fs.writeFileSync(ENV_PATH, content, "utf-8");
+  if (!fs.existsSync(CONFIG_DIR)) {
+    fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: CONFIG_DIR_MODE });
+  }
+  fs.chmodSync(CONFIG_DIR, CONFIG_DIR_MODE);
+  fs.writeFileSync(ENV_PATH, content, { encoding: "utf-8", mode: ENV_FILE_MODE });
+  fs.chmodSync(ENV_PATH, ENV_FILE_MODE);
   console.log(`\nSaved to ${ENV_PATH}`);
 }
 

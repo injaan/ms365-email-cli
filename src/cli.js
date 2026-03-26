@@ -16,6 +16,30 @@ async function ensureConfig() {
   }
 }
 
+function sanitizeTerminalOutput(value) {
+  return String(value ?? "").replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u001b]/g, "");
+}
+
+function safeDisplay(value, fallback = "Unknown") {
+  const sanitized = sanitizeTerminalOutput(value).trim();
+  return sanitized || fallback;
+}
+
+function sanitizeAttachmentName(name) {
+  const baseName = path.basename(String(name || "").replace(/[\\/:*?"<>|\u0000-\u001f]/g, "_")).trim();
+  return baseName || "attachment";
+}
+
+function resolveAttachmentOutputPath(outDir, attachmentName) {
+  const safeName = sanitizeAttachmentName(attachmentName);
+  const destination = path.resolve(outDir, safeName);
+  const relativePath = path.relative(outDir, destination);
+  if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
+    throw new Error(`Unsafe attachment name: ${attachmentName}`);
+  }
+  return destination;
+}
+
 function formatSize(bytes) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -99,9 +123,9 @@ program
 
       messages.forEach((msg, i) => {
         console.log(`\n[${i + 1}] ID: ${msg.id}`);
-        console.log(`    From: ${msg.from?.emailAddress?.address || "Unknown"}`);
-        console.log(`    Subject: ${msg.subject || "(no subject)"}${msg.hasAttachments ? " [+attachments]" : ""}`);
-        console.log(`    Received: ${msg.receivedDateTime}`);
+        console.log(`    From: ${safeDisplay(msg.from?.emailAddress?.address)}`);
+        console.log(`    Subject: ${safeDisplay(msg.subject, "(no subject)")}${msg.hasAttachments ? " [+attachments]" : ""}`);
+        console.log(`    Received: ${safeDisplay(msg.receivedDateTime, "(unknown)")}`);
       });
     } catch (err) {
       console.error("Error:", err.message);
@@ -132,9 +156,9 @@ program
       messages.forEach((msg, i) => {
         const readFlag = msg.isRead ? "read" : "unread";
         console.log(`\n[${i + 1}] ID: ${msg.id}`);
-        console.log(`    From: ${msg.from?.emailAddress?.address || "Unknown"}`);
-        console.log(`    Subject: ${msg.subject || "(no subject)"}${msg.hasAttachments ? " [+attachments]" : ""}`);
-        console.log(`    Received: ${msg.receivedDateTime}`);
+        console.log(`    From: ${safeDisplay(msg.from?.emailAddress?.address)}`);
+        console.log(`    Subject: ${safeDisplay(msg.subject, "(no subject)")}${msg.hasAttachments ? " [+attachments]" : ""}`);
+        console.log(`    Received: ${safeDisplay(msg.receivedDateTime, "(unknown)")}`);
         console.log(`    Status: ${readFlag}`);
       });
     } catch (err) {
@@ -195,12 +219,12 @@ program
       messages.forEach((msg, i) => {
         const readFlag = msg.isRead ? "read" : "unread";
         console.log(`[${i + 1}] ID: ${msg.id}`);
-        console.log(`    From: ${msg.from?.emailAddress?.address || "Unknown"}`);
+        console.log(`    From: ${safeDisplay(msg.from?.emailAddress?.address)}`);
         if (msg.toRecipients?.length) {
-          console.log(`    To: ${msg.toRecipients.map(r => r.emailAddress?.address).join(", ")}`);
+          console.log(`    To: ${sanitizeTerminalOutput(msg.toRecipients.map((r) => safeDisplay(r.emailAddress?.address)).join(", "))}`);
         }
-        console.log(`    Subject: ${msg.subject || "(no subject)"}${msg.hasAttachments ? " [+attachments]" : ""}`);
-        console.log(`    Received: ${msg.receivedDateTime}`);
+        console.log(`    Subject: ${safeDisplay(msg.subject, "(no subject)")}${msg.hasAttachments ? " [+attachments]" : ""}`);
+        console.log(`    Received: ${safeDisplay(msg.receivedDateTime, "(unknown)")}`);
         console.log(`    Status: ${readFlag}`);
         console.log();
       });
@@ -248,15 +272,15 @@ program
       const token = await getAccessToken();
       const msg = await getEmail(token, messageId);
 
-      console.log(`From: ${msg.from?.emailAddress?.name || ""} <${msg.from?.emailAddress?.address || "Unknown"}>`);
+      console.log(`From: ${safeDisplay(msg.from?.emailAddress?.name, "")} <${safeDisplay(msg.from?.emailAddress?.address)}>`);
       if (msg.toRecipients?.length) {
-        console.log(`To: ${msg.toRecipients.map(r => `${r.emailAddress?.name || ""} <${r.emailAddress?.address}>`).join(", ")}`);
+        console.log(`To: ${sanitizeTerminalOutput(msg.toRecipients.map((r) => `${safeDisplay(r.emailAddress?.name, "")} <${safeDisplay(r.emailAddress?.address)}>`).join(", "))}`);
       }
       if (msg.ccRecipients?.length) {
-        console.log(`CC: ${msg.ccRecipients.map(r => `${r.emailAddress?.name || ""} <${r.emailAddress?.address}>`).join(", ")}`);
+        console.log(`CC: ${sanitizeTerminalOutput(msg.ccRecipients.map((r) => `${safeDisplay(r.emailAddress?.name, "")} <${safeDisplay(r.emailAddress?.address)}>`).join(", "))}`);
       }
-      console.log(`Subject: ${msg.subject || "(no subject)"}`);
-      console.log(`Date: ${msg.sentDateTime || msg.receivedDateTime}`);
+      console.log(`Subject: ${safeDisplay(msg.subject, "(no subject)")}`);
+      console.log(`Date: ${safeDisplay(msg.sentDateTime || msg.receivedDateTime, "(unknown)")}`);
 
       const attResult = await getEmailAttachments(token, messageId);
       const atts = attResult.value || [];
@@ -267,7 +291,7 @@ program
         console.log(`Attachments (${fileAtts.length} files, ${inlineAtts.length} inline):`);
         atts.forEach((a, i) => {
           const tag = a.isInline ? "inline" : "file";
-          console.log(`  [${i + 1}] ${a.name} (${formatSize(a.size)}) [${tag}]`);
+          console.log(`  [${i + 1}] ${safeDisplay(a.name, "attachment")} (${formatSize(a.size)}) [${tag}]`);
         });
         if (fileAtts.length > 0) {
           console.log(`  Download: ms365-email-cli attachment ${messageId} -o <dir>`);
@@ -275,7 +299,7 @@ program
       }
 
       console.log(`\n--- Body (${msg.body?.contentType || "unknown"}) ---\n`);
-      console.log(msg.body?.content || "(empty body)");
+      console.log(sanitizeTerminalOutput(msg.body?.content || "(empty body)"));
     } catch (err) {
       console.error("Error:", err.message);
       process.exit(1);
@@ -312,16 +336,16 @@ program
         return;
       }
 
-      console.log(`Thread: ${rootMsg.subject || "(no subject)"} (${messages.length} messages)\n`);
+      console.log(`Thread: ${safeDisplay(rootMsg.subject, "(no subject)")} (${messages.length} messages)\n`);
 
       messages.forEach((msg, i) => {
-        const from = msg.from?.emailAddress?.address || "Unknown";
-        const date = msg.receivedDateTime;
-        const bodyPreview = (msg.body?.content || "").replace(/<[^>]*>/g, "").trim().slice(0, 200);
+        const from = safeDisplay(msg.from?.emailAddress?.address);
+        const date = safeDisplay(msg.receivedDateTime, "(unknown)");
+        const bodyPreview = sanitizeTerminalOutput((msg.body?.content || "").replace(/<[^>]*>/g, "").trim().slice(0, 200));
 
         console.log(`--- [${i + 1}] ${from} | ${date} ---`);
         console.log(`    ID: ${msg.id}`);
-        console.log(`    Subject: ${msg.subject || "(no subject)"}`);
+        console.log(`    Subject: ${safeDisplay(msg.subject, "(no subject)")}`);
         console.log(`    Preview: ${bodyPreview}${bodyPreview.length >= 200 ? "..." : ""}`);
         console.log();
       });
@@ -360,7 +384,7 @@ program
         console.log(`Attachments (${atts.length}):\n`);
         atts.forEach((a, i) => {
           const tag = a.isInline ? "inline" : "file";
-          console.log(`  [${i + 1}] ${a.name} (${a.contentType}, ${formatSize(a.size)}) [${tag}]`);
+          console.log(`  [${i + 1}] ${safeDisplay(a.name, "attachment")} (${safeDisplay(a.contentType, "unknown")}, ${formatSize(a.size)}) [${tag}]`);
           console.log(`      ID: ${a.id}`);
         });
         console.log(`\nTo download: ms365-email-cli attachment ${messageId} -o <dir>`);
@@ -373,7 +397,7 @@ program
       for (const att of atts) {
         const full = await getAttachmentContent(token, messageId, att.id);
         const buf = Buffer.from(full.contentBytes, "base64");
-        const outPath = path.join(outDir, att.name);
+        const outPath = resolveAttachmentOutputPath(outDir, att.name);
         fs.writeFileSync(outPath, buf);
         console.log(`Saved: ${outPath} (${formatSize(buf.length)})`);
       }

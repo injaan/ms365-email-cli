@@ -3,13 +3,41 @@ const fs = require("fs");
 const path = require("path");
 
 const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+function encodeGraphPathSegment(value, label) {
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new Error(`${label} is required`);
+  }
+  return encodeURIComponent(value.trim());
+}
+
+function escapeODataString(value) {
+  return value.replace(/'/g, "''");
+}
+
+function normalizeTop(top, defaultValue) {
+  const parsed = Number.parseInt(top, 10);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    return defaultValue;
+  }
+  return Math.min(parsed, 100);
+}
+
+function normalizeSinceDate(since) {
+  if (!since) return null;
+  if (!ISO_DATE_PATTERN.test(since)) {
+    throw new Error("Invalid --since value. Use YYYY-MM-DD.");
+  }
+  return `${since}T00:00:00Z`;
+}
 
 function getUserPath() {
   const email = process.env.MS365_FROM_EMAIL;
   if (!email) {
     throw new Error("MS365_FROM_EMAIL is required in .env for client_credentials flow");
   }
-  return `/users/${email}`;
+  return `/users/${encodeGraphPathSegment(email, "MS365_FROM_EMAIL")}`;
 }
 
 function request(method, urlPath, token, body = null) {
@@ -59,19 +87,21 @@ function request(method, urlPath, token, body = null) {
 
 async function getUnreadEmails(token, top = 10) {
   const userPath = getUserPath();
-  const apiPath = `${userPath}/messages?$filter=isRead eq false&$orderby=receivedDateTime desc&$top=${top}&$select=id,subject,from,receivedDateTime,isRead,hasAttachments`;
+  const safeTop = normalizeTop(top, 10);
+  const apiPath = `${userPath}/messages?$filter=isRead eq false&$orderby=receivedDateTime desc&$top=${safeTop}&$select=id,subject,from,receivedDateTime,isRead,hasAttachments`;
   return request("GET", apiPath, token);
 }
 
 async function getAllEmails(token, top = 10) {
   const userPath = getUserPath();
-  const apiPath = `${userPath}/messages?$orderby=receivedDateTime desc&$top=${top}&$select=id,subject,from,receivedDateTime,isRead,hasAttachments`;
+  const safeTop = normalizeTop(top, 10);
+  const apiPath = `${userPath}/messages?$orderby=receivedDateTime desc&$top=${safeTop}&$select=id,subject,from,receivedDateTime,isRead,hasAttachments`;
   return request("GET", apiPath, token);
 }
 
 async function searchEmails(token, opts = {}) {
   const userPath = getUserPath();
-  const { folder = "inbox", from, to, subject, query, since, top = 20 } = opts;
+  const { folder = "inbox", from, subject, query, since, top = 20 } = opts;
 
   let folderPath;
   if (folder === "sent") {
@@ -81,15 +111,16 @@ async function searchEmails(token, opts = {}) {
   }
 
   const params = new URLSearchParams();
-  params.set("$top", top);
+  params.set("$top", String(normalizeTop(top, 20)));
   params.set("$select", "id,subject,from,toRecipients,receivedDateTime,isRead,hasAttachments");
 
-  const searchText = query || from || subject || null;
+  const searchText = [query, from, subject].find((value) => typeof value === "string" && value.trim()) || null;
 
   if (searchText) {
-    params.set("$search", `"${searchText}"`);
+    const normalizedSearchText = searchText.replace(/"/g, "");
+    params.set("$search", `"${normalizedSearchText}"`);
   } else if (since) {
-    params.set("$filter", `receivedDateTime ge ${since}`);
+    params.set("$filter", `receivedDateTime ge ${normalizeSinceDate(since)}`);
     params.set("$orderby", "receivedDateTime desc");
   }
 
@@ -99,13 +130,14 @@ async function searchEmails(token, opts = {}) {
 
 async function getEmail(token, messageId) {
   const userPath = getUserPath();
-  const apiPath = `${userPath}/messages/${messageId}?$select=id,subject,from,toRecipients,ccRecipients,receivedDateTime,sentDateTime,body,hasAttachments,internetMessageId,conversationId`;
+  const apiPath = `${userPath}/messages/${encodeGraphPathSegment(messageId, "messageId")}?$select=id,subject,from,toRecipients,ccRecipients,receivedDateTime,sentDateTime,body,hasAttachments,internetMessageId,conversationId`;
   return request("GET", apiPath, token);
 }
 
 async function getThreadMessages(token, conversationId) {
   const userPath = getUserPath();
-  const apiPath = `${userPath}/messages?$filter=conversationId eq '${conversationId}'&$select=id,subject,from,toRecipients,receivedDateTime,isRead,body&$top=50`;
+  const escapedConversationId = escapeODataString(conversationId);
+  const apiPath = `${userPath}/messages?$filter=conversationId eq '${escapedConversationId}'&$select=id,subject,from,toRecipients,receivedDateTime,isRead,body&$top=50`;
   const result = await request("GET", apiPath, token);
   if (result.value) {
     result.value.sort((a, b) => new Date(a.receivedDateTime) - new Date(b.receivedDateTime));
@@ -115,19 +147,21 @@ async function getThreadMessages(token, conversationId) {
 
 async function getEmailAttachments(token, messageId) {
   const userPath = getUserPath();
-  const apiPath = `${userPath}/messages/${messageId}/attachments?$select=id,name,contentType,size,isInline`;
+  const apiPath = `${userPath}/messages/${encodeGraphPathSegment(messageId, "messageId")}/attachments?$select=id,name,contentType,size,isInline`;
   return request("GET", apiPath, token);
 }
 
 async function getAttachmentContent(token, messageId, attachmentId) {
   const userPath = getUserPath();
-  const apiPath = `${userPath}/messages/${messageId}/attachments/${attachmentId}`;
+  const safeMessageId = encodeGraphPathSegment(messageId, "messageId");
+  const safeAttachmentId = encodeGraphPathSegment(attachmentId, "attachmentId");
+  const apiPath = `${userPath}/messages/${safeMessageId}/attachments/${safeAttachmentId}`;
   return request("GET", apiPath, token);
 }
 
 async function markAsRead(token, messageId) {
   const userPath = getUserPath();
-  const apiPath = `${userPath}/messages/${messageId}`;
+  const apiPath = `${userPath}/messages/${encodeGraphPathSegment(messageId, "messageId")}`;
   return request("PATCH", apiPath, token, { isRead: true });
 }
 
@@ -169,7 +203,7 @@ async function sendEmail(token, to, subject, body, html = false, attachmentPaths
 async function replyEmail(token, messageId, body, html = false, replyAll = false, attachmentPaths = []) {
   const userPath = getUserPath();
   const action = replyAll ? "replyAll" : "reply";
-  const apiPath = `${userPath}/messages/${messageId}/${action}`;
+  const apiPath = `${userPath}/messages/${encodeGraphPathSegment(messageId, "messageId")}/${action}`;
 
   const attachments = attachmentPaths.map((filePath) => {
     if (!fs.existsSync(filePath)) {
