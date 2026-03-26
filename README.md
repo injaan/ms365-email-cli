@@ -35,6 +35,18 @@ This project is specially built for AI agents to read, search, triage, and act o
 npm install
 ```
 
+Global install from npm:
+
+```bash
+npm i -g @injaan.dev/ms365-email-cli
+```
+
+After install, run:
+
+```bash
+ms365-email-cli --help
+```
+
 For global CLI usage while developing:
 
 ```bash
