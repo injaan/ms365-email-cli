@@ -45,7 +45,7 @@ It creates or updates `.env` with:
 - `MS365_EMAIL_CLIENT_ID`
 - `MS365_EMAIL_TENANT_ID`
 - `MS365_EMAIL_CLIENT_SECRET`
-- `MS365_FROM_EMAIL`
+- `MS365_EMAIL_ADDRESS`
 
 ## Quick Commands
 

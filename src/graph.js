@@ -33,11 +33,13 @@ function normalizeSinceDate(since) {
 }
 
 function getUserPath() {
-  const email = process.env.MS365_FROM_EMAIL;
+  const email = process.env.MS365_EMAIL_ADDRESS;
   if (!email) {
-    throw new Error("MS365_FROM_EMAIL is required in .env for client_credentials flow");
+    throw new Error(
+      "MS365_EMAIL_ADDRESS is required in .env for client_credentials flow",
+    );
   }
-  return `/users/${encodeGraphPathSegment(email, "MS365_FROM_EMAIL")}`;
+  return `/users/${encodeGraphPathSegment(email, "MS365_EMAIL_ADDRESS")}`;
 }
 
 function request(method, urlPath, token, body = null) {
@@ -112,9 +114,15 @@ async function searchEmails(token, opts = {}) {
 
   const params = new URLSearchParams();
   params.set("$top", String(normalizeTop(top, 20)));
-  params.set("$select", "id,subject,from,toRecipients,receivedDateTime,isRead,hasAttachments");
+  params.set(
+    "$select",
+    "id,subject,from,toRecipients,receivedDateTime,isRead,hasAttachments",
+  );
 
-  const searchText = [query, from, subject].find((value) => typeof value === "string" && value.trim()) || null;
+  const searchText =
+    [query, from, subject].find(
+      (value) => typeof value === "string" && value.trim(),
+    ) || null;
 
   if (searchText) {
     const normalizedSearchText = searchText.replace(/"/g, "");
@@ -140,7 +148,9 @@ async function getThreadMessages(token, conversationId) {
   const apiPath = `${userPath}/messages?$filter=conversationId eq '${escapedConversationId}'&$select=id,subject,from,toRecipients,receivedDateTime,isRead,body&$top=50`;
   const result = await request("GET", apiPath, token);
   if (result.value) {
-    result.value.sort((a, b) => new Date(a.receivedDateTime) - new Date(b.receivedDateTime));
+    result.value.sort(
+      (a, b) => new Date(a.receivedDateTime) - new Date(b.receivedDateTime),
+    );
   }
   return result;
 }
@@ -165,7 +175,14 @@ async function markAsRead(token, messageId) {
   return request("PATCH", apiPath, token, { isRead: true });
 }
 
-async function sendEmail(token, to, subject, body, html = false, attachmentPaths = []) {
+async function sendEmail(
+  token,
+  to,
+  subject,
+  body,
+  html = false,
+  attachmentPaths = [],
+) {
   const userPath = getUserPath();
   const apiPath = `${userPath}/sendMail`;
 
@@ -200,7 +217,14 @@ async function sendEmail(token, to, subject, body, html = false, attachmentPaths
   return request("POST", apiPath, token, mail);
 }
 
-async function replyEmail(token, messageId, body, html = false, replyAll = false, attachmentPaths = []) {
+async function replyEmail(
+  token,
+  messageId,
+  body,
+  html = false,
+  replyAll = false,
+  attachmentPaths = [],
+) {
   const userPath = getUserPath();
   const action = replyAll ? "replyAll" : "reply";
   const apiPath = `${userPath}/messages/${encodeGraphPathSegment(messageId, "messageId")}/${action}`;
@@ -228,4 +252,15 @@ async function replyEmail(token, messageId, body, html = false, replyAll = false
   return request("POST", apiPath, token, payload);
 }
 
-module.exports = { getUnreadEmails, getAllEmails, searchEmails, getEmail, getThreadMessages, getEmailAttachments, getAttachmentContent, markAsRead, sendEmail, replyEmail };
+module.exports = {
+  getUnreadEmails,
+  getAllEmails,
+  searchEmails,
+  getEmail,
+  getThreadMessages,
+  getEmailAttachments,
+  getAttachmentContent,
+  markAsRead,
+  sendEmail,
+  replyEmail,
+};

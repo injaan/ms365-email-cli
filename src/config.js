@@ -7,7 +7,7 @@ const REQUIRED_VARS = [
   { key: "MS365_EMAIL_CLIENT_ID", label: "Client ID" },
   { key: "MS365_EMAIL_TENANT_ID", label: "Tenant ID" },
   { key: "MS365_EMAIL_CLIENT_SECRET", label: "Client Secret", secret: true },
-  { key: "MS365_FROM_EMAIL", label: "Mailbox email address" },
+  { key: "MS365_EMAIL_ADDRESS", label: "Mailbox email address" },
 ];
 
 const CONFIG_DIR_MODE = 0o700;
@@ -40,10 +40,20 @@ function getMissingVars(env) {
 function ask(question, mask = false) {
   return new Promise((resolve) => {
     if (!mask) {
-      const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-      rl.question(question, (ans) => { rl.close(); resolve(ans.trim()); });
+      const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout,
+      });
+      rl.question(question, (ans) => {
+        rl.close();
+        resolve(ans.trim());
+      });
     } else {
-      const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: true });
+      const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout,
+        terminal: true,
+      });
       process.stdout.write(question);
       let buf = "";
       const onData = (char) => {
@@ -70,7 +80,10 @@ async function runWizard() {
   if (missing.length === 0) {
     console.log("All config variables are set in .env");
     const ans = await ask("Reconfigure all? (y/N): ");
-    if (ans.toLowerCase() !== "y") { console.log("No changes made."); return; }
+    if (ans.toLowerCase() !== "y") {
+      console.log("No changes made.");
+      return;
+    }
   } else {
     console.log(`Missing: ${missing.map((v) => v.label).join(", ")}\n`);
   }
@@ -80,7 +93,10 @@ async function runWizard() {
 
   for (const v of REQUIRED_VARS) {
     const hasCurrent = !!existing[v.key];
-    const masked = hasCurrent && v.secret ? "****" + existing[v.key].slice(-4) : existing[v.key] || "(not set)";
+    const masked =
+      hasCurrent && v.secret
+        ? "****" + existing[v.key].slice(-4)
+        : existing[v.key] || "(not set)";
 
     if (hasCurrent && !missing.some((m) => m.key === v.key)) {
       const ans = await ask(`${v.label} [${masked}]: `);
@@ -90,16 +106,23 @@ async function runWizard() {
 
     const ans = await ask(`${v.label}: `, v.secret);
     if (!ans && hasCurrent) continue;
-    if (!ans) { console.error(`${v.label} is required.`); process.exit(1); }
+    if (!ans) {
+      console.error(`${v.label} is required.`);
+      process.exit(1);
+    }
     values[v.key] = ans;
   }
 
-  const content = REQUIRED_VARS.map((v) => `${v.key}=${values[v.key]}`).join("\n") + "\n";
+  const content =
+    REQUIRED_VARS.map((v) => `${v.key}=${values[v.key]}`).join("\n") + "\n";
   if (!fs.existsSync(CONFIG_DIR)) {
     fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: CONFIG_DIR_MODE });
   }
   fs.chmodSync(CONFIG_DIR, CONFIG_DIR_MODE);
-  fs.writeFileSync(ENV_PATH, content, { encoding: "utf-8", mode: ENV_FILE_MODE });
+  fs.writeFileSync(ENV_PATH, content, {
+    encoding: "utf-8",
+    mode: ENV_FILE_MODE,
+  });
   fs.chmodSync(ENV_PATH, ENV_FILE_MODE);
   console.log(`\nSaved to ${ENV_PATH}`);
 }
