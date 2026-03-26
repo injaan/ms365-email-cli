@@ -3,6 +3,7 @@
 const { Command } = require("commander");
 const fs = require("fs");
 const path = require("path");
+const { version: packageVersion } = require("../package.json");
 const { getAccessToken } = require("./auth");
 const { getUnreadEmails, getAllEmails, searchEmails, getEmail, getThreadMessages, getEmailAttachments, getAttachmentContent, markAsRead, sendEmail, replyEmail } = require("./graph");
 const { runWizard, checkConfig } = require("./config");
@@ -113,7 +114,7 @@ program
     "  Requires .env with MS365_EMAIL_CLIENT_ID, MS365_EMAIL_TENANT_ID, MS365_EMAIL_CLIENT_SECRET\n" +
     "  Azure app needs Mail.ReadWrite + Mail.Send permissions with admin consent"
   )
-  .version("1.0.0")
+  .version(packageVersion)
   .addHelpText(
     "after",
     `
