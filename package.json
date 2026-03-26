@@ -1,0 +1,35 @@
+{
+  "name": "ms365-email-cli",
+  "version": "1.0.0",
+  "description": "CLI tool to manage MS365 mailbox via Microsoft Graph API",
+  "main": "index.js",
+  "bin": {
+    "ms365-email-cli": "./index.js"
+  },
+  "files": [
+    "index.js",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "start": "node index.js",
+    "pack:check": "npm pack --dry-run"
+  },
+  "keywords": [
+    "ms365",
+    "microsoft",
+    "graph",
+    "email",
+    "cli",
+    "agent",
+    "automation"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "commander": "^14.0.3"
+  }
+}
