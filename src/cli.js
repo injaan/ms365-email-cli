@@ -28,6 +28,26 @@ async function ensureConfig() {
   }
 }
 
+function buildConfigHelpIndicator() {
+  const missing = checkConfig();
+  const initRequired = missing.length > 0;
+
+  if (!initRequired) {
+    return [
+      "Configuration status:",
+      "  config required: no (init already done)",
+      "",
+    ].join("\n");
+  }
+
+  return [
+    "Configuration status:",
+    "  config required: yes (run: ms365-email-cli init)",
+    `  missing: ${missing.map((v) => v.label).join(", ")}`,
+    "",
+  ].join("\n");
+}
+
 function sanitizeTerminalOutput(value) {
   return String(value ?? "").replace(
     /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u001b]/g,
@@ -133,6 +153,7 @@ program
   .addHelpText(
     "after",
     `
+${buildConfigHelpIndicator()}
 Output format (JSON-parseable line prefixes):
   [N]       = email index in list
   ID:       = Graph API message ID (use with mark-read)
