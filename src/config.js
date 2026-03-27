@@ -8,17 +8,18 @@ const BASE_VARS = [
     key: "AUTH_MODE",
     label: "Auth mode (client_credentials or delegated)",
   },
-  { key: "MS365_EMAIL_CLIENT_ID", label: "Client ID" },
+  { key: "MS365_CLIENT_ID", label: "Client ID" },
 ];
 
 const CLIENT_CREDENTIALS_VARS = [
-  { key: "MS365_EMAIL_TENANT_ID", label: "Tenant ID" },
-  { key: "MS365_EMAIL_CLIENT_SECRET", label: "Client Secret", secret: true },
+  { key: "MS365_TENANT_ID", label: "Tenant ID" },
+  { key: "MS365_CLIENT_SECRET", label: "Client Secret", secret: true },
   { key: "MS365_EMAIL_ADDRESS", label: "Mailbox email address" },
 ];
 
 const CONFIG_DIR_MODE = 0o700;
 const ENV_FILE_MODE = 0o600;
+const DEFAULT_DELEGATED_CLIENT_ID = "90819426-b785-4919-a65e-818d7a8e9952";
 
 function parseEnvFile(filePath) {
   const env = {};
@@ -41,7 +42,7 @@ function loadEnv() {
 }
 
 function normalizeAuthMode(value) {
-  const mode = String(value || "client_credentials")
+  const mode = String(value || "delegated")
     .trim()
     .toLowerCase();
   return mode === "delegated" ? "delegated" : "client_credentials";
@@ -96,26 +97,10 @@ function ask(question, mask = false) {
 }
 
 async function runWizard() {
-  const existing = loadEnv();
-  existing.AUTH_MODE = normalizeAuthMode(existing.AUTH_MODE);
-  const missing = getMissingVars(existing);
-
-  if (missing.length === 0) {
-    console.log("All config variables are set in .env");
-    const ans = await ask("Reconfigure all? (y/N): ");
-    if (ans.toLowerCase() !== "y") {
-      console.log("No changes made.");
-      return;
-    }
-  } else {
-    console.log(`Missing: ${missing.map((v) => v.label).join(", ")}\n`);
-  }
-
   console.log("=== MS365 Mail Manager Config ===\n");
-  const values = { ...existing };
-  if (!values.AUTH_MODE) {
-    values.AUTH_MODE = "client_credentials";
-  }
+  console.log("Old .env configuration cleared.\n");
+
+  const values = { AUTH_MODE: "delegated" };
 
   const modeInput = await ask(
     `Auth mode (${values.AUTH_MODE}) [client_credentials/delegated]: `,
@@ -129,20 +114,14 @@ async function runWizard() {
   );
 
   for (const v of requiredVars) {
-    const hasCurrent = !!existing[v.key];
-    const masked =
-      hasCurrent && v.secret
-        ? "****" + existing[v.key].slice(-4)
-        : existing[v.key] || "(not set)";
-
-    if (hasCurrent && !missing.some((m) => m.key === v.key)) {
-      const ans = await ask(`${v.label} [${masked}]: `);
-      if (ans) values[v.key] = ans;
+    if (v.key === "MS365_CLIENT_ID" && values.AUTH_MODE === "delegated") {
+      const effectiveDefault = DEFAULT_DELEGATED_CLIENT_ID;
+      const ans = await ask(`${v.label} [${effectiveDefault}]: `);
+      values[v.key] = ans ? ans : effectiveDefault;
       continue;
     }
 
     const ans = await ask(`${v.label}: `, v.secret);
-    if (!ans && hasCurrent) continue;
     if (!ans) {
       console.error(`${v.label} is required.`);
       process.exit(1);
@@ -151,8 +130,8 @@ async function runWizard() {
   }
 
   if (values.AUTH_MODE === "delegated") {
-    values.MS365_EMAIL_TENANT_ID = "consumers";
-    delete values.MS365_EMAIL_CLIENT_SECRET;
+    values.MS365_TENANT_ID = "consumers";
+    delete values.MS365_CLIENT_SECRET;
     delete values.MS365_EMAIL_ADDRESS;
   }
 

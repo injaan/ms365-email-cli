@@ -35,11 +35,11 @@ function normalizeAuthMode(value) {
 
 function getCredentials() {
   const authMode = normalizeAuthMode(process.env.AUTH_MODE);
-  const clientId = process.env.MS365_EMAIL_CLIENT_ID;
+  const clientId = process.env.MS365_CLIENT_ID;
   const tenantId =
-    process.env.MS365_EMAIL_TENANT_ID ||
+    process.env.MS365_TENANT_ID ||
     (authMode === "delegated" ? "consumers" : "");
-  const clientSecret = process.env.MS365_EMAIL_CLIENT_SECRET;
+  const clientSecret = process.env.MS365_CLIENT_SECRET;
 
   if (!clientId || !tenantId) {
     throw new Error("Missing MS365 credentials. Run: ms365-email-cli init");
@@ -47,7 +47,7 @@ function getCredentials() {
 
   if (authMode === "client_credentials" && !clientSecret) {
     throw new Error(
-      "MS365_EMAIL_CLIENT_SECRET is required when AUTH_MODE=client_credentials",
+      "MS365_CLIENT_SECRET is required when AUTH_MODE=client_credentials",
     );
   }
 
@@ -299,7 +299,7 @@ async function getDelegatedTokenViaDeviceCode() {
     if (errorCode === "invalid_client" || /AADSTS7000218/.test(detailedError)) {
       throw new Error(
         "Token error: delegated sign-in is using an app registration that requires client authentication. " +
-          "Either set MS365_EMAIL_CLIENT_SECRET in .env, or enable public client flows on the Azure app registration. " +
+          "Either set MS365_CLIENT_SECRET in .env, or enable public client flows on the Azure app registration. " +
           `Details: ${detailedError}`,
       );
     }

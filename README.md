@@ -40,10 +40,12 @@ Run the wizard:
 ms365-email-cli init
 ```
 
+`init` replaces the existing CLI `.env` values with a fresh configuration.
+
 It creates or updates `.env` with:
 
 - `AUTH_MODE` (`client_credentials` or `delegated`)
-- `MS365_EMAIL_CLIENT_ID`
+- `MS365_CLIENT_ID`
 
 Auth mode guidance:
 
@@ -52,15 +54,16 @@ Auth mode guidance:
 
 When `AUTH_MODE=client_credentials`:
 
-- `MS365_EMAIL_TENANT_ID`
-- `MS365_EMAIL_CLIENT_SECRET`
+- `MS365_TENANT_ID`
+- `MS365_CLIENT_SECRET`
 - `MS365_EMAIL_ADDRESS`
 
 When `AUTH_MODE=delegated`:
 
 - Sign-in happens via device-code prompt in terminal
 - API calls use the signed-in mailbox (`/me`)
-- Wizard auto-sets `MS365_EMAIL_TENANT_ID=consumers`
+- Wizard defaults `MS365_CLIENT_ID=90819426-b785-4919-a65e-818d7a8e9952` (you can enter your own client ID)
+- Wizard auto-sets `MS365_TENANT_ID=consumers`
 - If your tenant is set to `common` but app is Microsoft-account-only, the CLI auto-falls back to `/consumers`
 - Access/refresh tokens are cached locally, so login is reused across runs until refresh expires or is revoked
 
@@ -94,7 +97,7 @@ ms365-email-cli reply-all <MESSAGE_ID> -b "Thanks everyone"
 - Personal mailbox returns invalid user:
   set `AUTH_MODE=delegated` and re-run (app-only mode cannot access personal Outlook users by `/users/{email}`)
 - Delegated sign-in fails with `AADSTS7000218`:
-  your app registration is requiring client auth; either add `MS365_EMAIL_CLIENT_SECRET` in `.env` or enable public client flows in Azure App Registration
+  your app registration is requiring client auth; either add `MS365_CLIENT_SECRET` in `.env` or enable public client flows in Azure App Registration
 - Delegated sign-in fails with `AADSTS70002` (client must be marked as mobile):
   in Azure App Registration -> Authentication, enable public client flows (mobile and desktop)
 - Need to force delegated re-login:
