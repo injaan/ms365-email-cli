@@ -127,11 +127,7 @@ const program = new Command();
 program
   .name("ms365-email-cli")
   .description(
-    "CLI tool to manage MS365 mailbox via Microsoft Graph API\n" +
-      "  AUTH_MODE=delegated (personal Microsoft accounts) requires: MS365_CLIENT_ID\n" +
-      "  AUTH_MODE=client_credentials (company/work accounts) requires: MS365_CLIENT_ID + MS365_TENANT_ID + MS365_CLIENT_SECRET + MS365_EMAIL_ADDRESS\n" +
-      "  delegated mode signs in interactively and uses /me endpoints\n" +
-      "  Azure app needs Mail.ReadWrite + Mail.Send permissions with admin consent",
+    "CLI tool to manage MS365 mailbox via Microsoft Graph API, specially for AI agents",
   )
   .version(packageVersion)
   .addHelpText(
