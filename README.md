@@ -78,6 +78,7 @@ ms365-email-cli thread <MESSAGE_ID>
 ms365-email-cli attachment <MESSAGE_ID> -o ./downloads
 ms365-email-cli mark-read <MESSAGE_ID>
 ms365-email-cli send -t user@example.com -s "Hello" -b "Hi there"
+ms365-email-cli send -t user@example.com -c manager@example.com -s "Hello" -b "Hi there"
 ms365-email-cli reply <MESSAGE_ID> -b "Thanks"
 ms365-email-cli reply-all <MESSAGE_ID> -b "Thanks everyone"
 ```

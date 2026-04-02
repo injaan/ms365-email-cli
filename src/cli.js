@@ -142,6 +142,14 @@ function formatSize(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function collectEmailList(value, previous = []) {
+  const parsed = String(value ?? "")
+    .split(",")
+    .map((entry) => sanitizeTerminalOutput(entry).trim())
+    .filter(Boolean);
+  return previous.concat(parsed);
+}
+
 const program = new Command();
 
 program
@@ -182,6 +190,7 @@ Examples:
   $ ms365-email-cli reply <ID> -b "Thanks"  # reply to sender
   $ ms365-email-cli reply-all <ID> -b "Thanks"  # reply to all
   $ ms365-email-cli send -t a@b.com -s Hi -b "hello"
+  $ ms365-email-cli send -t a@b.com -c manager@b.com -s Hi -b "hello"
   $ ms365-email-cli send -t a@b.com -s Hi -b "<h1>Hi</h1>" --html
   $ ms365-email-cli send -t a@b.com -s Hi -b "see attached" -a file.pdf -a img.png
 `,
@@ -562,9 +571,15 @@ program
   .command("send")
   .description(
     "Send an email via MS365 mailbox\n" +
-      "  Requires -t, -s, -b flags. Optional --html and -a for attachments",
+      "  Requires -t, -s, -b flags. Optional --cc, --html and -a for attachments",
   )
   .requiredOption("-t, --to <email>", "recipient email address")
+  .option(
+    "-c, --cc <email>",
+    "CC recipient email address (repeatable, supports comma-separated values)",
+    collectEmailList,
+    [],
+  )
   .requiredOption("-s, --subject <subject>", "email subject")
   .requiredOption("-b, --body <body>", "email body (plain text or HTML)")
   .option("--html", "send body as HTML", false)
@@ -578,9 +593,11 @@ program
     "after",
     "\nExamples:\n" +
       '  ms365-email-cli send -t user@example.com -s Hello -b "plain text body"\n' +
+      '  ms365-email-cli send -t user@example.com -c manager@example.com -s Hello -b "cc included"\n' +
+      '  ms365-email-cli send -t user@example.com -c a@example.com,b@example.com -s Hello -b "multi cc"\n' +
       '  ms365-email-cli send -t user@example.com -s Hello -b "<b>bold</b>" --html\n' +
       '  ms365-email-cli send -t user@example.com -s Report -b "see attached" -a report.pdf\n' +
-      '  ms365-email-cli send -t user@example.com -s Files -b "attached" -a a.pdf -b b.xlsx\n',
+      '  ms365-email-cli send -t user@example.com -s Files -b "attached" -a a.pdf -a b.xlsx\n',
   )
   .action(async (opts) => {
     try {
@@ -593,6 +610,7 @@ program
         opts.body,
         opts.html,
         opts.attachment,
+        opts.cc,
       );
       console.log(`Email sent to ${opts.to}`);
     } catch (err) {

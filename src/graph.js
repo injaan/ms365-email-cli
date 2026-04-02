@@ -48,6 +48,14 @@ function getUserPath() {
   return `/users/${encodeGraphPathSegment(email, "MS365_EMAIL_ADDRESS")}`;
 }
 
+function normalizeEmailList(value) {
+  const entries = Array.isArray(value) ? value : [value];
+  return entries
+    .flatMap((entry) => String(entry ?? "").split(","))
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
 function request(method, urlPath, token, body = null) {
   return new Promise((resolve, reject) => {
     const url = new URL(GRAPH_BASE + urlPath);
@@ -188,9 +196,16 @@ async function sendEmail(
   body,
   html = false,
   attachmentPaths = [],
+  cc = [],
 ) {
   const userPath = getUserPath();
   const apiPath = `${userPath}/sendMail`;
+  const toRecipients = normalizeEmailList(to);
+  const ccRecipients = normalizeEmailList(cc);
+
+  if (toRecipients.length === 0) {
+    throw new Error("At least one recipient is required for --to");
+  }
 
   const attachments = attachmentPaths.map((filePath) => {
     if (!fs.existsSync(filePath)) {
@@ -210,13 +225,18 @@ async function sendEmail(
         contentType: html ? "HTML" : "Text",
         content: body,
       },
-      toRecipients: [
-        {
-          emailAddress: {
-            address: to,
-          },
+      toRecipients: toRecipients.map((address) => ({
+        emailAddress: {
+          address,
         },
-      ],
+      })),
+      ...(ccRecipients.length > 0 && {
+        ccRecipients: ccRecipients.map((address) => ({
+          emailAddress: {
+            address,
+          },
+        })),
+      }),
       ...(attachments.length > 0 && { attachments }),
     },
   };
