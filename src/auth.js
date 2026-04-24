@@ -11,9 +11,20 @@ function loadEnvFile(filePath) {
     const idx = trimmed.indexOf("=");
     if (idx === -1) continue;
     const key = trimmed.slice(0, idx).trim();
-    const val = trimmed.slice(idx + 1).trim();
+    const val = normalizeEnvValue(trimmed.slice(idx + 1));
     if (!process.env[key]) process.env[key] = val;
   }
+}
+
+function normalizeEnvValue(value) {
+  const trimmed = String(value ?? "").trim();
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
 }
 
 loadEnvFile(ENV_PATH);
@@ -92,7 +103,9 @@ function ensureConfigDir() {
   if (!fs.existsSync(CONFIG_DIR)) {
     fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
   }
-  fs.chmodSync(CONFIG_DIR, 0o700);
+  if (process.platform !== "win32") {
+    fs.chmodSync(CONFIG_DIR, 0o700);
+  }
 }
 
 function readDelegatedTokenCache() {
@@ -112,7 +125,9 @@ function writeDelegatedTokenCache(payload) {
     encoding: "utf-8",
     mode: 0o600,
   });
-  fs.chmodSync(TOKEN_CACHE_PATH, 0o600);
+  if (process.platform !== "win32") {
+    fs.chmodSync(TOKEN_CACHE_PATH, 0o600);
+  }
 }
 
 function isCachedTokenUsable(cache) {

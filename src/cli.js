@@ -150,6 +150,74 @@ function collectEmailList(value, previous = []) {
   return previous.concat(parsed);
 }
 
+function resolveInputFilePath(filePath) {
+  const rawPath = String(filePath || "").trim();
+  if (!rawPath) {
+    throw new Error("File path is required.");
+  }
+  if (rawPath === "~") {
+    return process.env.HOME || process.env.USERPROFILE || rawPath;
+  }
+  if (rawPath.startsWith(`~${path.sep}`) || rawPath.startsWith("~/")) {
+    const home = process.env.HOME || process.env.USERPROFILE;
+    if (home) {
+      return path.resolve(home, rawPath.slice(2));
+    }
+  }
+  return path.resolve(rawPath);
+}
+
+function readUtf8File(filePath, label) {
+  const resolvedPath = resolveInputFilePath(filePath);
+  const stat = fs.existsSync(resolvedPath) ? fs.statSync(resolvedPath) : null;
+  if (!stat || !stat.isFile()) {
+    throw new Error(`${label} not found: ${filePath}`);
+  }
+  return fs.readFileSync(resolvedPath, "utf-8");
+}
+
+function readStdin() {
+  if (process.stdin.isTTY) {
+    throw new Error("No stdin content available for --body-stdin.");
+  }
+  return new Promise((resolve, reject) => {
+    let content = "";
+    process.stdin.setEncoding("utf-8");
+    process.stdin.on("data", (chunk) => {
+      content += chunk;
+    });
+    process.stdin.on("end", () => resolve(content));
+    process.stdin.on("error", reject);
+  });
+}
+
+async function resolveMessageBody(opts) {
+  const sources = [opts.body, opts.bodyFile, opts.bodyStdin].filter(
+    (value) => value !== undefined && value !== false,
+  );
+  if (sources.length === 0) {
+    throw new Error(
+      "Email body is required. Use --body, --body-file, or --body-stdin.",
+    );
+  }
+  if (sources.length > 1) {
+    throw new Error(
+      "Use only one body source: --body, --body-file, or --body-stdin.",
+    );
+  }
+  if (opts.bodyFile) {
+    return readUtf8File(opts.bodyFile, "Body file");
+  }
+  if (opts.bodyStdin) {
+    return readStdin();
+  }
+  return opts.body;
+}
+
+function normalizeAttachmentPaths(paths) {
+  return paths.map(resolveInputFilePath);
+}
+
 const program = new Command();
 
 program
@@ -192,7 +260,13 @@ Examples:
   $ ms365-email-cli send -t a@b.com -s Hi -b "hello"
   $ ms365-email-cli send -t a@b.com -c manager@b.com -s Hi -b "hello"
   $ ms365-email-cli send -t a@b.com -s Hi -b "<h1>Hi</h1>" --html
+  $ ms365-email-cli send -t a@b.com -s Hi --body-file email.html --html
+  $ ms365-email-cli send -t a@b.com -s Hi --body-stdin --html < email.html
+  $ ms365-email-cli reply <ID> --body-file reply.html --html
   $ ms365-email-cli send -t a@b.com -s Hi -b "see attached" -a file.pdf -a img.png
+
+HTML body tip:
+  Use --body-file or --body-stdin for multiline HTML or HTML containing shell-sensitive characters.
 `,
   );
 
@@ -552,15 +626,23 @@ program
       const outDir = path.resolve(opts.output);
       if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
 
+      let savedCount = 0;
       for (const att of atts) {
         const full = await getAttachmentContent(token, messageId, att.id);
+        if (!full.contentBytes) {
+          console.log(
+            `Skipped: ${safeDisplay(att.name, "attachment")} (attachment content is not a downloadable file)`,
+          );
+          continue;
+        }
         const buf = Buffer.from(full.contentBytes, "base64");
         const outPath = resolveAttachmentOutputPath(outDir, att.name);
         fs.writeFileSync(outPath, buf);
+        savedCount += 1;
         console.log(`Saved: ${outPath} (${formatSize(buf.length)})`);
       }
 
-      console.log(`\nDone. ${atts.length} file(s) downloaded to ${outDir}`);
+      console.log(`\nDone. ${savedCount} file(s) downloaded to ${outDir}`);
     } catch (err) {
       console.error("Error:", err.message);
       process.exit(1);
@@ -571,7 +653,7 @@ program
   .command("send")
   .description(
     "Send an email via MS365 mailbox\n" +
-      "  Requires -t, -s, -b flags. Optional --cc, --html and -a for attachments",
+      "  Requires -t, -s, and one body source. Optional --cc, --html and -a for attachments",
   )
   .requiredOption("-t, --to <email>", "recipient email address")
   .option(
@@ -581,7 +663,9 @@ program
     [],
   )
   .requiredOption("-s, --subject <subject>", "email subject")
-  .requiredOption("-b, --body <body>", "email body (plain text or HTML)")
+  .option("-b, --body <body>", "email body (plain text or HTML)")
+  .option("--body-file <file>", "read email body from a UTF-8 file")
+  .option("--body-stdin", "read email body from standard input", false)
   .option("--html", "send body as HTML", false)
   .option(
     "-a, --attachment <file>",
@@ -596,20 +680,24 @@ program
       '  ms365-email-cli send -t user@example.com -c manager@example.com -s Hello -b "cc included"\n' +
       '  ms365-email-cli send -t user@example.com -c a@example.com,b@example.com -s Hello -b "multi cc"\n' +
       '  ms365-email-cli send -t user@example.com -s Hello -b "<b>bold</b>" --html\n' +
+      "  ms365-email-cli send -t user@example.com -s Hello --body-file email.html --html\n" +
+      "  ms365-email-cli send -t user@example.com -s Hello --body-stdin --html < email.html\n" +
       '  ms365-email-cli send -t user@example.com -s Report -b "see attached" -a report.pdf\n' +
       '  ms365-email-cli send -t user@example.com -s Files -b "attached" -a a.pdf -a b.xlsx\n',
   )
   .action(async (opts) => {
     try {
+      const body = await resolveMessageBody(opts);
+      const attachments = normalizeAttachmentPaths(opts.attachment);
       await ensureConfig();
       const token = await getAccessToken();
       await sendEmail(
         token,
         opts.to,
         opts.subject,
-        opts.body,
+        body,
         opts.html,
-        opts.attachment,
+        attachments,
         opts.cc,
       );
       console.log(`Email sent to ${opts.to}`);
@@ -625,7 +713,9 @@ program
     "Reply to sender of an email\n" +
       "  Sends reply only to the original sender",
   )
-  .requiredOption("-b, --body <body>", "reply body (plain text or HTML)")
+  .option("-b, --body <body>", "reply body (plain text or HTML)")
+  .option("--body-file <file>", "read reply body from a UTF-8 file")
+  .option("--body-stdin", "read reply body from standard input", false)
   .option("--html", "send body as HTML", false)
   .option(
     "-a, --attachment <file>",
@@ -638,19 +728,23 @@ program
     "\nExamples:\n" +
       '  ms365-email-cli reply <ID> -b "Thanks for your email"\n' +
       '  ms365-email-cli reply <ID> -b "<p>Thanks</p>" --html\n' +
+      "  ms365-email-cli reply <ID> --body-file reply.html --html\n" +
+      "  ms365-email-cli reply <ID> --body-stdin --html < reply.html\n" +
       '  ms365-email-cli reply <ID> -b "See attached" -a report.pdf\n',
   )
   .action(async (messageId, opts) => {
     try {
+      const body = await resolveMessageBody(opts);
+      const attachments = normalizeAttachmentPaths(opts.attachment);
       await ensureConfig();
       const token = await getAccessToken();
       await replyEmail(
         token,
         messageId,
-        opts.body,
+        body,
         opts.html,
         false,
-        opts.attachment,
+        attachments,
       );
       console.log(`Reply sent to message ${messageId}`);
     } catch (err) {
@@ -665,7 +759,9 @@ program
     "Reply to all recipients of an email\n" +
       "  Sends reply to original sender, To, and CC recipients",
   )
-  .requiredOption("-b, --body <body>", "reply body (plain text or HTML)")
+  .option("-b, --body <body>", "reply body (plain text or HTML)")
+  .option("--body-file <file>", "read reply body from a UTF-8 file")
+  .option("--body-stdin", "read reply body from standard input", false)
   .option("--html", "send body as HTML", false)
   .option(
     "-a, --attachment <file>",
@@ -678,19 +774,23 @@ program
     "\nExamples:\n" +
       '  ms365-email-cli reply-all <ID> -b "Thanks everyone"\n' +
       '  ms365-email-cli reply-all <ID> -b "<p>Thanks</p>" --html\n' +
+      "  ms365-email-cli reply-all <ID> --body-file reply.html --html\n" +
+      "  ms365-email-cli reply-all <ID> --body-stdin --html < reply.html\n" +
       '  ms365-email-cli reply-all <ID> -b "See attached" -a report.pdf\n',
   )
   .action(async (messageId, opts) => {
     try {
+      const body = await resolveMessageBody(opts);
+      const attachments = normalizeAttachmentPaths(opts.attachment);
       await ensureConfig();
       const token = await getAccessToken();
       await replyEmail(
         token,
         messageId,
-        opts.body,
+        body,
         opts.html,
         true,
-        opts.attachment,
+        attachments,
       );
       console.log(`Reply-all sent to message ${messageId}`);
     } catch (err) {
@@ -699,4 +799,4 @@ program
     }
   });
 
-program.parse();
+program.parse(process.argv.map((arg) => (arg === "-help" ? "--help" : arg)));

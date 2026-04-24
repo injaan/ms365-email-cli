@@ -5,6 +5,25 @@ const { normalizeAuthMode } = require("./auth");
 
 const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const MAX_SIMPLE_ATTACHMENT_BYTES = 3 * 1024 * 1024;
+
+const CONTENT_TYPES_BY_EXTENSION = {
+  ".csv": "text/csv",
+  ".gif": "image/gif",
+  ".htm": "text/html",
+  ".html": "text/html",
+  ".ics": "text/calendar",
+  ".jpeg": "image/jpeg",
+  ".jpg": "image/jpeg",
+  ".json": "application/json",
+  ".pdf": "application/pdf",
+  ".png": "image/png",
+  ".txt": "text/plain",
+  ".xls": "application/vnd.ms-excel",
+  ".xlsx":
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ".zip": "application/zip",
+};
 
 function encodeGraphPathSegment(value, label) {
   if (typeof value !== "string" || value.trim() === "") {
@@ -54,6 +73,32 @@ function normalizeEmailList(value) {
     .flatMap((entry) => String(entry ?? "").split(","))
     .map((entry) => entry.trim())
     .filter(Boolean);
+}
+
+function getContentType(filePath) {
+  const extension = path.extname(filePath).toLowerCase();
+  return CONTENT_TYPES_BY_EXTENSION[extension] || "application/octet-stream";
+}
+
+function buildFileAttachments(attachmentPaths = []) {
+  return attachmentPaths.map((filePath) => {
+    const stat = fs.existsSync(filePath) ? fs.statSync(filePath) : null;
+    if (!stat || !stat.isFile()) {
+      throw new Error(`Attachment not found: ${filePath}`);
+    }
+    if (stat.size >= MAX_SIMPLE_ATTACHMENT_BYTES) {
+      throw new Error(
+        `Attachment is too large for this CLI flow: ${filePath}. ` +
+          "Microsoft Graph simple file attachments must be under 3 MB.",
+      );
+    }
+    return {
+      "@odata.type": "#microsoft.graph.fileAttachment",
+      name: path.basename(filePath),
+      contentType: getContentType(filePath),
+      contentBytes: fs.readFileSync(filePath, { encoding: "base64" }),
+    };
+  });
 }
 
 function request(method, urlPath, token, body = null) {
@@ -183,6 +228,18 @@ async function getAttachmentContent(token, messageId, attachmentId) {
   return request("GET", apiPath, token);
 }
 
+async function addAttachmentToMessage(token, messageId, attachment) {
+  const userPath = getUserPath();
+  const apiPath = `${userPath}/messages/${encodeGraphPathSegment(messageId, "messageId")}/attachments`;
+  return request("POST", apiPath, token, attachment);
+}
+
+async function sendDraftMessage(token, messageId) {
+  const userPath = getUserPath();
+  const apiPath = `${userPath}/messages/${encodeGraphPathSegment(messageId, "messageId")}/send`;
+  return request("POST", apiPath, token, {});
+}
+
 async function markAsRead(token, messageId) {
   const userPath = getUserPath();
   const apiPath = `${userPath}/messages/${encodeGraphPathSegment(messageId, "messageId")}`;
@@ -207,16 +264,7 @@ async function sendEmail(
     throw new Error("At least one recipient is required for --to");
   }
 
-  const attachments = attachmentPaths.map((filePath) => {
-    if (!fs.existsSync(filePath)) {
-      throw new Error(`Attachment not found: ${filePath}`);
-    }
-    return {
-      "@odata.type": "#microsoft.graph.fileAttachment",
-      name: path.basename(filePath),
-      contentBytes: fs.readFileSync(filePath, { encoding: "base64" }),
-    };
-  });
+  const attachments = buildFileAttachments(attachmentPaths);
 
   const mail = {
     message: {
@@ -255,16 +303,30 @@ async function replyEmail(
   const action = replyAll ? "replyAll" : "reply";
   const apiPath = `${userPath}/messages/${encodeGraphPathSegment(messageId, "messageId")}/${action}`;
 
-  const attachments = attachmentPaths.map((filePath) => {
-    if (!fs.existsSync(filePath)) {
-      throw new Error(`Attachment not found: ${filePath}`);
+  const attachments = buildFileAttachments(attachmentPaths);
+
+  if (attachments.length > 0) {
+    const draftAction = replyAll ? "createReplyAll" : "createReply";
+    const draftApiPath = `${userPath}/messages/${encodeGraphPathSegment(messageId, "messageId")}/${draftAction}`;
+    const draft = await request("POST", draftApiPath, token, {
+      message: {
+        body: {
+          contentType: html ? "HTML" : "Text",
+          content: body,
+        },
+      },
+    });
+
+    if (!draft.id) {
+      throw new Error("Graph API did not return a draft reply message ID.");
     }
-    return {
-      "@odata.type": "#microsoft.graph.fileAttachment",
-      name: path.basename(filePath),
-      contentBytes: fs.readFileSync(filePath, { encoding: "base64" }),
-    };
-  });
+
+    for (const attachment of attachments) {
+      await addAttachmentToMessage(token, draft.id, attachment);
+    }
+
+    return sendDraftMessage(token, draft.id);
+  }
 
   const payload = {
     message: {
@@ -272,7 +334,6 @@ async function replyEmail(
         contentType: html ? "HTML" : "Text",
         content: body,
       },
-      ...(attachments.length > 0 && { attachments }),
     },
   };
   return request("POST", apiPath, token, payload);

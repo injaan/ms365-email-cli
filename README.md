@@ -78,10 +78,17 @@ ms365-email-cli thread <MESSAGE_ID>
 ms365-email-cli attachment <MESSAGE_ID> -o ./downloads
 ms365-email-cli mark-read <MESSAGE_ID>
 ms365-email-cli send -t user@example.com -s "Hello" -b "Hi there"
+ms365-email-cli send -t user@example.com -s "Hello" --body-file email.html --html
+ms365-email-cli send -t user@example.com -s "Hello" --body-stdin --html < email.html
 ms365-email-cli send -t user@example.com -c manager@example.com -s "Hello" -b "Hi there"
 ms365-email-cli reply <MESSAGE_ID> -b "Thanks"
+ms365-email-cli reply <MESSAGE_ID> --body-file reply.html --html
 ms365-email-cli reply-all <MESSAGE_ID> -b "Thanks everyone"
 ```
+
+For HTML email, prefer `--body-file` or `--body-stdin` when the body contains
+quotes, newlines, `<`, or `>` characters. This avoids shell-specific escaping
+differences across macOS, Linux, Windows PowerShell, and Windows cmd.exe.
 
 ## AI-Agent Friendly
 
