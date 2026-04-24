@@ -4,7 +4,8 @@
   "description": "CLI tool to manage MS365 mailbox via Microsoft Graph API",
   "main": "index.js",
   "bin": {
-    "ms365-email-cli": "index.js"
+    "ms365-email-cli": "index.js",
+    "ms365-email-cli-mcp": "src/mcp.js"
   },
   "files": [
     "index.js",
@@ -14,6 +15,7 @@
   ],
   "scripts": {
     "start": "node index.js",
+    "start:mcp": "node src/mcp.js",
     "pack:check": "npm pack --dry-run"
   },
   "keywords": [
@@ -40,6 +42,7 @@
     "access": "public"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "commander": "^14.0.3"
   }
 }

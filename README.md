@@ -96,10 +96,84 @@ differences across macOS, Linux, Windows PowerShell, and Windows cmd.exe.
 - Script-friendly terminal output
 - Full inbox workflows via CLI (read/search/reply/send/attachments)
 
+## MCP Server
+
+This package also includes an MCP stdio server. After installing this package,
+you get both binaries:
+
+```bash
+ms365-email-cli
+ms365-email-cli-mcp
+```
+
+Before using the MCP server, initialize the mailbox config once:
+
+```bash
+ms365-email-cli init
+```
+
+Run the server directly:
+
+```bash
+ms365-email-cli-mcp
+```
+
+MCP clients launch it as a stdio server. Example configs:
+
+Claude Code:
+
+```bash
+claude mcp add --transport stdio ms365-email-cli -- ms365-email-cli-mcp
+```
+
+OpenAI Codex:
+
+```bash
+codex mcp add ms365-email-cli -- ms365-email-cli-mcp
+```
+
+Codex config TOML:
+
+```toml
+[mcp_servers."ms365-email-cli"]
+command = "ms365-email-cli-mcp"
+```
+
+GitHub Copilot in VS Code `.vscode/mcp.json`:
+
+```json
+{
+  "servers": {
+    "ms365-email-cli": {
+      "type": "stdio",
+      "command": "ms365-email-cli-mcp"
+    }
+  }
+}
+```
+
+Available MCP tools:
+
+- `list_emails`
+- `list_unread_emails`
+- `read_email`
+- `thread`
+- `mark_read`
+- `search_emails`
+- `send_email`
+- `reply`
+- `reply_all`
+- `attachment`
+
+The `send_email`, `reply`, and `reply_all` tools accept either `body` or
+`body_file`; use `body_file` for large or multiline HTML.
+
 ## Troubleshooting
 
 - `command not found: ms365-email-cli`:
   reinstall globally with `npm i -g @injaan.dev/ms365-email-cli`
+- `command not found: ms365-email-cli-mcp`:
+  reinstall or upgrade this package with `npm i -g @injaan.dev/ms365-email-cli`
 - `Missing MS365 credentials`:
   run `ms365-email-cli init`
 - Personal mailbox returns invalid user:
